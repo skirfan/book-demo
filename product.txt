@@ -1,0 +1,201 @@
+const Cart = require("./cart");
+const db = require("../utils/database");
+
+const products = [];
+
+module.exports = class Product {
+  constructor(id, title, imageUrl, price, description) {
+    this.id = id;
+    this.title = title;
+    this.imageUrl = imageUrl;
+    this.price = price;
+    this.description = description;
+  }
+  save() {
+    return db.execute(
+      "INSERT into products(title, price, description, imageUrl)values(?,?,?,?)",
+      [this.title, this.price, this.description, this.imageUrl]
+    );
+  }
+
+  static deleteById(id) {}
+
+  static fetchAll() {
+    return db.execute("SELECT * from products");
+  }
+
+  static findById(id) {
+    return db.execute("select * from products where products.id = ?", [id]);
+  }
+};
+
+
+
+
+
+
+
+
+
+\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+
+const bcrypt = require("bcryptjs");
+const nodemailer = require("nodemailer");
+const sendgridTransport = require("nodemailer-sendgrid-transport");
+const User = require("../models/user");
+
+// const transporter = nodemailer.createTransport(
+//   sendgridTransport({
+//     auth: {
+//       api_key:
+//         "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"
+//     }
+//   })
+// );
+
+var transporter = nodemailer.createTransport({
+  host: "smtp.mailtrap.io",
+  port: 2525,
+  auth: {
+    user: "47e1e4389baf32",
+    pass: "2bfdda24452898"
+  }
+});
+
+exports.getLogin = (req, res, next) => {
+  let message = req.flash("error");
+  if (message.length > 0) {
+    message = message[0];
+  } else {
+    message = null;
+  }
+  res.render("auth/login", {
+    path: "/login",
+    pageTitle: "Login",
+    errorMessage: message
+  });
+};
+
+exports.getSignup = (req, res, next) => {
+  let message = req.flash("error");
+  if (message.length > 0) {
+    message = message[0];
+  } else {
+    message = null;
+  }
+  res.render("auth/signup", {
+    path: "/signup",
+    pageTitle: "Signup",
+    errorMessage: message
+  });
+};
+
+exports.postLogin = (req, res, next) => {
+  const email = req.body.email;
+  const password = req.body.password;
+  // res.setHeader("Set-Cookie", "loggedIn=true; HttpOnly");
+  User.findOne({ email: email })
+    .then(user => {
+      if (!user) {
+        req.flash("error", "Invalid email or password");
+        return res.redirect("/login");
+      }
+      bcrypt
+        .compare(password, user.password)
+        .then(doMatch => {
+          if (doMatch) {
+            req.session.isLoggedIn = true;
+            req.session.user = user;
+            return req.session.save(error => {
+              console.log(error);
+              res.redirect("/");
+            });
+          }
+          req.flash("error", "Invalid email or password");
+          res.redirect("/login");
+        })
+        .catch(error => {
+          return res.redirect("/login");
+          console.log(error);
+        });
+    })
+    .catch(error => {
+      console.log(error);
+    });
+};
+
+exports.postSignup = async (req, res, next) => {
+  const email = req.body.email;
+  const password = req.body.password;
+  const confirmPassword = req.body.confirmPassword;
+
+  const mailOptions = {
+    from: '"Test Server" <test@example.com>',
+    to: email,
+    subject: "Email Test",
+    text: "This is an email test using Mailtrap.io"
+  };
+
+  User.findOne({ email: email })
+    .then(userDoc => {
+      if (userDoc) {
+        req.flash("error", "E-Mail is already exist!");
+        return res.redirect("/signup");
+      }
+      return bcrypt
+        .hash(password, 12)
+        .then(hashedPassword => {
+          const user = new User({
+            email: email,
+            password: hashedPassword,
+            cart: { items: [] }
+          });
+          return user.save();
+        })
+        .then(result => {
+          res.redirect("/login");
+          return transporter.sendMail(mailOptions, (err, info) => {
+            if (err) {
+              console.log(err);
+              return next(err);
+            }
+            console.log("Info: ", info);
+            res.json({
+              message: "Email successfully sent."
+            });
+          });
+          // return transporter.sendMail({
+          //   to: email,
+          //   from: "shop@node-complete.com",
+          //   subject: "Signup succeeded!",
+          //   html: "<h1>You successfully signed up!</h1>"
+          // });
+        })
+        .catch(err => {
+          console.log(err);
+        });
+    })
+    .catch(err => {
+      console.log(err);
+    });
+};
+
+exports.postLogout = (req, res, next) => {
+  req.session.destroy(error => {
+    console.log(error);
+    res.redirect("/");
+  });
+};
+
+
+\\\\\\\\\\\\\\\\\\\\\\\\\
+
+// const transporter = nodemailer.createTransport(
+//   sendgridTransport({
+//     auth: {
+//       api_key:
+//         "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"
+//     }
+//   })
+// );
